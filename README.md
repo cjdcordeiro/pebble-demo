@@ -21,3 +21,7 @@ oci-archive:demo_latest_amd64.rock docker-daemon:demo:latest`
 ```bash
 docker run --rm -p 8080:8080 -p 52325:52325 -p 52323:52323 demo
 ```
+
+You'll then find the ASP.NET sample running at http://localhost:8080,
+the .NET monitor running at http://localhost:52323, and the .NET
+monitor metrics available at http://localhost:52325.

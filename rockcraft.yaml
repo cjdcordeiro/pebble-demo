@@ -99,9 +99,8 @@ checks:
     level: ready
     tcp:
       port: 52323
-  exec-check:
+  diag-socket-check:
     override: replace
     level: alive
-    period: 20s
     exec:
       command: pebble ls /diag/dotnet-monitor.sock
