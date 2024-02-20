@@ -1,0 +1,107 @@
+name: demo
+base: bare
+build-base: devel
+version: latest
+summary: A simple ASP.NET Hello World application, with a .NET monitor
+description: |
+  This rock container a Hello World ASP.NET sample that is being used for
+  demonstration purposes only, in combination with the .NET Monitor as an
+  additional runtime service.
+license: GPL-3.0
+platforms:
+  amd64:
+
+run-user: _daemon_
+
+parts:
+  aspnet:
+    plugin: nil
+    stage-packages:
+      - base-files_base
+      - base-files_release-info
+      - ca-certificates_data
+      - aspnetcore-runtime-8.0_libs
+
+  dotnet-monitor:
+    plugin: dump
+    source: https://dotnetcli.azureedge.net/dotnet/diagnostics/monitor/8.0.1/dotnet-monitor-base-8.0.1-linux-x64.tar.gz
+    source-type: tar
+    source-checksum: "sha512/014b3530f626aeae0bdf7f9c806808d177d623801f126e927390f13c5be88e1deb6402af72fc54133ee38e08ed66c8bbbffd662c4c68ecce71ed72c94e1ebc0d"
+    organize:
+      "*": monitor/
+
+  aspnetapp:
+    plugin: dotnet
+    source: aspnetapp
+    build-packages:
+      - dotnet-sdk-8.0
+    override-build: |
+      dotnet restore
+      mkdir $CRAFT_PART_INSTALL/app
+      dotnet publish --no-restore -o $CRAFT_PART_INSTALL/app
+
+  diagnostics:
+    plugin: nil
+    override-build: |
+      mkdir $CRAFT_PART_INSTALL/diag
+    permissions:
+      - path: diag
+        owner: 584792
+        group: 584792
+
+environment:
+  DOTNET_RUNNING_IN_CONTAINER: "true"
+  DOTNET_ROOT: /usr/lib/dotnet
+
+### Pebble services
+services:
+  aspnetapp:
+    override: replace
+    startup: enabled
+    command: ./aspnetapp
+    working-dir: /app
+    environment:
+      ASPNETCORE_URLS: "http://+:8080"
+      DOTNET_DiagnosticPorts: /diag/dotnet-monitor.sock
+    on-failure: shutdown
+    on-check-failure:
+      aspnet-check: shutdown
+  monitor:
+    override: replace
+    startup: enabled
+    command: /monitor/dotnet-monitor [ collect --no-auth ]
+    environment:
+      DOTNETMONITOR_DiagnosticPort__ConnectionMode: Listen
+      DOTNETMONITOR_Storage__DefaultSharedPath: /diag
+      DOTNETMONITOR_Metrics__Endpoints: "http://+:52325"
+      DOTNETMONITOR_Urls: "http://0.0.0.0:52323"
+      ASPNETCORE_HTTP_PORTS: ""
+      COMPlus_EnableDiagnostics: "0"
+      DefaultProcess__Filters__0__Key: ProcessId
+      DefaultProcess__Filters__0__Value: "1"
+      DiagnosticPort__DeleteEndpointOnStartup: "true"
+      DOTNET_gcServer: "1"
+      Logging__Console__FormatterName: json
+      Logging__Console__FormatterOptions__TimestampFormat: "yyyy-MM-ddTHH:mm:ss.fffffffZ"
+      Logging__Console__FormatterOptions__UseUtcTimestamp: "true"
+    requires: [aspnetapp]
+    on-failure: restart
+
+# Pebble checks
+checks:
+  aspnet-check:
+    override: replace
+    level: ready
+    http:
+      url: http://localhost:8080
+  monitor-check:
+    override: replace
+    level: ready
+    tcp:
+      port: 52323
+  exec-check:
+    override: replace
+    level: alive
+    period: 20s
+    exec:
+      command: pebble ls /diag/dotnet-monitor.sock
