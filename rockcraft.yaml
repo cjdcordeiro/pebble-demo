@@ -1,3 +1,4 @@
+# some comment
 name: demo
 base: bare
 build-base: devel
