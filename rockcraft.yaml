@@ -1,4 +1,3 @@
-# some comment test
 name: demo
 base: bare
 build-base: devel
